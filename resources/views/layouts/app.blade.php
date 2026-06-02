@@ -178,10 +178,23 @@
             </a>
         </nav>
 
+        <div class="nav-section">Transaksi</div>
+        <nav class="nav flex-column">
+            <a class="nav-link {{ request()->routeIs('sales.*') ? 'active' : '' }}" href="{{ route('sales.index') }}">
+                <i class="bi bi-cart-check"></i> Penjualan
+            </a>
+            <a class="nav-link {{ request()->routeIs('purchases.*') ? 'active' : '' }}" href="{{ route('purchases.index') }}">
+                <i class="bi bi-box-arrow-in-down"></i> Pembelian
+            </a>
+        </nav>
+
         <div class="nav-section">Inventory</div>
         <nav class="nav flex-column">
             <a class="nav-link {{ request()->routeIs('stocks.*') ? 'active' : '' }}" href="{{ route('stocks.index') }}">
                 <i class="bi bi-clipboard-data"></i> Stok
+            </a>
+            <a class="nav-link {{ request()->routeIs('stock-adjustments.*') ? 'active' : '' }}" href="{{ route('stock-adjustments.index') }}">
+                <i class="bi bi-arrow-repeat"></i> Stock Adjustment
             </a>
         </nav>
 
