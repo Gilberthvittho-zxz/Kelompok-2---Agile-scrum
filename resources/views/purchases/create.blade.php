@@ -79,6 +79,13 @@
                         </div>
                     </div>
 
+                    <div class="position-relative">
+                        <div id="catalogOverlay" class="position-absolute w-100 h-100 d-flex flex-column align-items-center justify-content-center text-center"
+                             style="background: rgba(255,255,255,.92); z-index:10; border-radius: 6px;">
+                            <i class="bi bi-truck text-warning" style="font-size: 3rem"></i>
+                            <h6 class="mt-3 mb-1">Pilih Supplier Dulu</h6>
+                            <p class="text-muted small mb-0">Katalog akan tampilkan produk dari supplier yang dipilih</p>
+                        </div>
                     <div class="catalog-grid row g-2" id="catalogGrid" style="max-height: 520px; overflow-y: auto;">
                         @forelse($products as $product)
                             <div class="col-md-6 catalog-item"
@@ -109,6 +116,7 @@
                                 <i class="bi bi-inbox"></i> Tidak ada produk aktif.
                             </div>
                         @endforelse
+                    </div>
                     </div>
                 </div>
             </div>
@@ -279,25 +287,32 @@
     });
 
     const supplierSelect = document.getElementById('supplierSelect');
+    const catalogOverlay = document.getElementById('catalogOverlay');
+
     function applyFilter() {
         const q = searchInput.value.toLowerCase().trim();
         const cat = categorySelect.value;
         const sup = supplierSelect.value;
+
+        // Tampilkan / sembunyikan overlay "Pilih Supplier Dulu"
+        catalogOverlay.classList.toggle('d-none', !!sup);
+        if (!sup) return; // gak perlu filter kalau katalog ke-cover overlay
+
         let visible = 0;
         document.querySelectorAll('.catalog-item').forEach(el => {
             const name = el.dataset.name.toLowerCase();
             const code = (el.dataset.code || '').toLowerCase();
             const matchQ = !q || name.includes(q) || code.includes(q);
             const matchCat = !cat || el.dataset.category === cat;
-            const matchSup = !sup || el.dataset.supplier === sup;
+            const matchSup = el.dataset.supplier === sup;
             const show = matchQ && matchCat && matchSup;
             el.style.display = show ? '' : 'none';
             if (show) visible++;
         });
 
-        // Tampilkan pesan kalau supplier dipilih tapi tidak ada produk-nya
+        // Pesan kalau supplier dipilih tapi tidak ada produknya
         let emptyMsg = document.getElementById('catalogEmptyMsg');
-        if (sup && visible === 0) {
+        if (visible === 0) {
             if (!emptyMsg) {
                 emptyMsg = document.createElement('div');
                 emptyMsg.id = 'catalogEmptyMsg';
@@ -313,10 +328,10 @@
     searchInput.addEventListener('input', applyFilter);
     categorySelect.addEventListener('change', applyFilter);
     supplierSelect.addEventListener('change', () => {
-        // Saat ganti supplier, juga kosongkan keranjang biar tidak campur supplier
-        if (cart.size > 0 && supplierSelect.value) {
+        // Saat ganti supplier (atau kembali ke kosong), clear keranjang
+        if (cart.size > 0) {
             if (!confirm('Ganti supplier akan mengosongkan keranjang. Lanjutkan?')) {
-                // Revert? Tidak bisa easily. Tetap clear.
+                return; // batal ganti supplier? Sayangnya browser sudah ubah value... revert manual
             }
             cart.clear();
             refresh();
@@ -343,6 +358,8 @@
     arrivalDateInput.addEventListener('change', updateArrivalNotice);
     updateArrivalNotice();
 
+    // INIT: jalankan filter & cart sekali saat load (untuk handle case supplier sudah ke-select dari awal)
+    applyFilter();
     refresh();
 })();
 </script>

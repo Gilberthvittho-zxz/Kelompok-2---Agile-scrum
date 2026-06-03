@@ -104,6 +104,13 @@ class PurchaseController extends Controller
                     throw ValidationException::withMessages(['items' => "Produk '{$product->name}' sedang non-aktif."]);
                 }
 
+                // Wajib: produk harus dari supplier yang dipilih
+                if ((int) $product->supplier_id !== (int) $data['supplier_id']) {
+                    throw ValidationException::withMessages([
+                        'items' => "Produk '{$product->name}' bukan dari supplier yang dipilih. 1 transaksi pembelian hanya untuk 1 supplier.",
+                    ]);
+                }
+
                 $lineSub = $item['qty'] * $item['price'];
                 $subtotal += $lineSub;
 
@@ -241,8 +248,11 @@ class PurchaseController extends Controller
             ]);
         });
 
+        $msg = "Pembelian {$purchase->code} berhasil di-void."
+            . ($wasConfirmed ? ' Stok telah disesuaikan kembali.' : ' Stok tidak diubah (status sebelumnya pending).');
+
         return redirect()
             ->route('purchases.show', $purchase)
-            ->with('success', "Pembelian {$purchase->code} berhasil di-void. Stok telah disesuaikan kembali.");
+            ->with('success', $msg);
     }
 }

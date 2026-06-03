@@ -133,14 +133,6 @@
                     <button type="button" class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#voidModal">
                         <i class="bi bi-x-octagon"></i> Void Pembelian
                     </button>
-                    <small class="text-muted d-block mt-2">
-                        <i class="bi bi-info-circle"></i>
-                        @if($purchase->isPending())
-                            Pembelian pending → void langsung tanpa adjust stok (stok belum ditambah).
-                        @else
-                            Void akan mengurangi stok sesuai jumlah dibeli. Tidak bisa kalau stok sudah tidak cukup.
-                        @endif
-                    </small>
                 @else
                     <div class="alert alert-secondary mb-0 small">
                         <i class="bi bi-info-circle"></i> Pembelian sudah di-void.

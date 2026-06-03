@@ -109,8 +109,9 @@
                         <label class="form-label small text-muted">Metode Pembayaran <span class="text-danger">*</span></label>
                         <div class="d-flex gap-2 flex-wrap">
                             @foreach($paymentMethods as $i => $pm)
-                                <input type="radio" class="btn-check" name="payment_method_id"
+                                <input type="radio" class="btn-check payment-radio" name="payment_method_id"
                                        id="pm{{ $pm->id }}" value="{{ $pm->id }}"
+                                       data-code="{{ $pm->code }}"
                                        {{ old('payment_method_id', $paymentMethods->first()->id) == $pm->id ? 'checked' : '' }} required>
                                 <label class="btn btn-sm btn-outline-secondary" for="pm{{ $pm->id }}">
                                     <i class="bi {{ $pm->icon ?? 'bi-credit-card' }}"></i> {{ $pm->name }}
@@ -138,14 +139,19 @@
                         <span class="text-success fs-5" id="displayTotal">Rp 0</span>
                     </div>
 
-                    <div class="mt-3">
-                        <label class="form-label small text-muted">Jumlah Dibayar <span class="text-danger">*</span></label>
+                    <div class="mt-3" id="paidSection">
+                        <label class="form-label small text-muted">
+                            Jumlah Dibayar <span class="text-danger">*</span>
+                            <span id="paidAutoNote" class="text-success" style="display:none">
+                                <i class="bi bi-info-circle"></i> auto = total (non-tunai)
+                            </span>
+                        </label>
                         <div class="input-group input-group-sm">
                             <span class="input-group-text">Rp</span>
                             <input type="number" name="paid_amount" id="paidInput" class="form-control form-control-sm text-end"
                                    value="{{ old('paid_amount', 0) }}" min="0" step="1000" required>
                         </div>
-                        <div class="d-flex justify-content-between small mt-2">
+                        <div class="d-flex justify-content-between small mt-2" id="changeRow">
                             <span class="text-muted">Kembalian</span>
                             <span id="displayChange" class="fw-semibold">Rp 0</span>
                         </div>
@@ -180,11 +186,23 @@
     const subtotalEl = document.getElementById('displaySubtotal');
     const totalEl = document.getElementById('displayTotal');
     const changeEl = document.getElementById('displayChange');
+    const changeRow = document.getElementById('changeRow');
     const discountInput = document.getElementById('discountInput');
     const paidInput = document.getElementById('paidInput');
+    const paidAutoNote = document.getElementById('paidAutoNote');
     const submitBtn = document.getElementById('submitBtn');
     const searchInput = document.getElementById('catalogSearch');
     const categorySelect = document.getElementById('catalogCategory');
+    const paymentRadios = document.querySelectorAll('.payment-radio');
+
+    function selectedPaymentCode() {
+        const r = document.querySelector('.payment-radio:checked');
+        return r ? r.dataset.code : 'cash';
+    }
+    function isCashlessMethod() {
+        const c = selectedPaymentCode();
+        return c === 'transfer' || c === 'qris';
+    }
 
     function refreshCart() {
         cartBody.innerHTML = '';
@@ -255,6 +273,22 @@
 
         const discount = parseFloat(discountInput.value) || 0;
         const total = Math.max(0, subtotal - discount);
+        const cashless = isCashlessMethod();
+
+        // Untuk transfer/QRIS: auto-fill jumlah dibayar = total, lock input, sembunyikan kembalian
+        if (cashless) {
+            paidInput.value = total;
+            paidInput.readOnly = true;
+            paidInput.classList.add('bg-light');
+            paidAutoNote.style.display = '';
+            changeRow.style.display = 'none';
+        } else {
+            paidInput.readOnly = false;
+            paidInput.classList.remove('bg-light');
+            paidAutoNote.style.display = 'none';
+            changeRow.style.display = '';
+        }
+
         const paid = parseFloat(paidInput.value) || 0;
         const change = paid - total;
 
@@ -308,6 +342,7 @@
 
     discountInput.addEventListener('input', refreshCart);
     paidInput.addEventListener('input', refreshCart);
+    paymentRadios.forEach(r => r.addEventListener('change', refreshCart));
 
     refreshCart();
 })();
