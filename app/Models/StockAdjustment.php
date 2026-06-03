@@ -8,19 +8,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['code', 'adjustment_date', 'reason', 'note', 'created_by'])]
+#[Fillable(['code', 'adjustment_date', 'note', 'created_by'])]
 class StockAdjustment extends Model
 {
     use HasFactory;
-
-    public const REASONS = [
-        'rusak' => 'Barang Rusak',
-        'expired' => 'Barang Expired',
-        'hilang' => 'Barang Hilang',
-        'koreksi' => 'Koreksi Pencatatan',
-        'opname' => 'Hasil Stock Opname',
-        'lain' => 'Lain-lain',
-    ];
 
     protected function casts(): array
     {
@@ -37,9 +28,12 @@ class StockAdjustment extends Model
         return $this->belongsTo(\App\Models\User::class, 'created_by');
     }
 
-    public function reasonLabel(): string
+    /**
+     * Daftar alasan unik yang dipakai di adjustment ini (untuk summary di index)
+     */
+    public function uniqueReasons(): array
     {
-        return self::REASONS[$this->reason] ?? $this->reason;
+        return $this->details->pluck('reason')->unique()->values()->all();
     }
 
     public static function generateCode(\DateTimeInterface $when = null): string
