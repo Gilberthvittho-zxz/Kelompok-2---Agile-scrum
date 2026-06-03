@@ -18,23 +18,27 @@ class ProductController extends Controller
     {
         $q = $request->string('q')->toString();
         $categoryId = $request->integer('category_id');
+        $supplierId = $request->integer('supplier_id'); // <-- 1. PASTIKAN ADA INI
 
         $products = Product::query()
             ->with(['category', 'supplier'])
             ->when($q !== '', function ($query) use ($q) {
                 $query->where(function ($w) use ($q) {
                     $w->where('name', 'like', "%{$q}%")
-                      ->orWhere('code', 'like', "%{$q}%");
+                        ->orWhere('code', 'like', "%{$q}%");
                 });
             })
-            ->when($categoryId > 0, fn ($query) => $query->where('category_id', $categoryId))
+            ->when($categoryId > 0, fn($query) => $query->where('category_id', $categoryId))
+            ->when($supplierId > 0, fn($query) => $query->where('supplier_id', $supplierId)) // <-- 2. PASTIKAN ADA INI
             ->orderBy('name')
             ->paginate(10)
             ->withQueryString();
 
         $categories = Category::orderBy('name')->get();
+        $suppliers = Supplier::orderBy('name')->get(); // <-- TAMBAHKAN INI
 
-        return view('products.index', compact('products', 'categories', 'q', 'categoryId'));
+
+        return view('products.index', compact('products', 'categories', 'q', 'categoryId', 'suppliers', 'supplierId'));
     }
 
     public function create(): View
@@ -108,7 +112,7 @@ class ProductController extends Controller
 
     public function destroy(Request $request, Product $product): RedirectResponse
     {
-        if (! $this->passwordOk($request)) {
+        if (!$this->passwordOk($request)) {
             return back()->with('error', 'Password salah. Aksi dibatalkan.');
         }
 
@@ -121,11 +125,11 @@ class ProductController extends Controller
 
     public function toggleStatus(Request $request, Product $product): RedirectResponse
     {
-        if (! $this->passwordOk($request)) {
+        if (!$this->passwordOk($request)) {
             return back()->with('error', 'Password salah. Aksi dibatalkan.');
         }
 
-        $product->update(['is_active' => ! $product->is_active]);
+        $product->update(['is_active' => !$product->is_active]);
 
         return back()->with('success', "Produk {$product->name} sekarang " . ($product->is_active ? 'AKTIF' : 'NON-AKTIF') . '.');
     }
@@ -139,7 +143,7 @@ class ProductController extends Controller
     {
         $codeRule = 'unique:products,code';
         if ($ignoreId) {
-            $codeRule .= ','.$ignoreId;
+            $codeRule .= ',' . $ignoreId;
         }
 
         $data = $request->validate([
