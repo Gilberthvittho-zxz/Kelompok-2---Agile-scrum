@@ -34,9 +34,9 @@
                     <tr>
                         <th>Kode</th>
                         <th>Tanggal</th>
-                        <th>Alasan</th>
-                        <th class="text-center">Item Diubah</th>
-                        <th>Catatan</th>
+                        <th>Alasan yang Dipakai</th>
+                        <th class="text-center">Item</th>
+                        <th>Catatan Umum</th>
                         <th>Oleh</th>
                         <th width="80" class="text-end">Aksi</th>
                     </tr>
@@ -46,7 +46,12 @@
                         <tr>
                             <td><strong>{{ $adj->code }}</strong></td>
                             <td><small>{{ $adj->adjustment_date->format('d M Y H:i') }}</small></td>
-                            <td><span class="badge bg-light text-dark">{{ $adj->reasonLabel() }}</span></td>
+                            <td>
+                                @foreach($adj->uniqueReasons() as $r)
+                                    @php $label = $reasons[$r] ?? $r; @endphp
+                                    <span class="badge bg-light text-dark small me-1">{{ $label }}</span>
+                                @endforeach
+                            </td>
                             <td class="text-center">{{ $adj->details->count() }}</td>
                             <td><small>{{ \Illuminate\Support\Str::limit($adj->note, 50) ?: '—' }}</small></td>
                             <td><small>{{ $adj->creator?->name ?? '—' }}</small></td>

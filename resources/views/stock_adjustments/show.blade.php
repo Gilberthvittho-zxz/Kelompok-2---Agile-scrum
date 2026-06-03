@@ -18,7 +18,6 @@
             <div>
                 <h4 class="fw-bold mb-1">{{ $adjustment->code }}</h4>
                 <div class="small text-muted">{{ $adjustment->adjustment_date->format('l, d M Y H:i') }}</div>
-                <span class="badge bg-secondary mt-1">{{ $adjustment->reasonLabel() }}</span>
             </div>
             <div class="text-end small text-muted">
                 <div>Oleh: <strong>{{ $adjustment->creator?->name ?? '—' }}</strong></div>
@@ -28,7 +27,7 @@
 
         @if($adjustment->note)
             <div class="alert alert-light small">
-                <span class="text-muted">Catatan:</span> {{ $adjustment->note }}
+                <span class="text-muted">Catatan umum:</span> {{ $adjustment->note }}
             </div>
         @endif
 
@@ -40,6 +39,8 @@
                     <th class="text-center">Stok Sebelum</th>
                     <th class="text-center">Stok Sesudah</th>
                     <th class="text-center">Perubahan</th>
+                    <th>Alasan</th>
+                    <th>Catatan</th>
                 </tr>
             </thead>
             <tbody>
@@ -57,6 +58,8 @@
                         <td class="text-center">{{ $d->qty_before }}</td>
                         <td class="text-center fw-semibold">{{ $d->qty_after }}</td>
                         <td class="text-center fw-bold {{ $diffClass }}">{{ $sign }}{{ $d->qty_diff }}</td>
+                        <td><span class="badge {{ $d->reasonBadgeClass() }}">{{ $d->reasonLabel() }}</span></td>
+                        <td><small class="text-muted">{{ $d->note ?: '—' }}</small></td>
                     </tr>
                 @endforeach
             </tbody>

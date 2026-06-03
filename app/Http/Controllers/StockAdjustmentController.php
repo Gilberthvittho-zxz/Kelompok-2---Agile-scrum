@@ -22,7 +22,8 @@ class StockAdjustmentController extends Controller
 
         $adjustments = StockAdjustment::query()
             ->with(['details', 'creator'])
-            ->when($reason !== '', fn ($q) => $q->where('reason', $reason))
+            ->when($reason !== '',
+                fn ($q) => $q->whereHas('details', fn ($d) => $d->where('reason', $reason)))
             ->when($from !== '', fn ($q) => $q->whereDate('adjustment_date', '>=', $from))
             ->when($to !== '', fn ($q) => $q->whereDate('adjustment_date', '<=', $to))
             ->orderByDesc('adjustment_date')
@@ -32,7 +33,7 @@ class StockAdjustmentController extends Controller
 
         return view('stock_adjustments.index', [
             'adjustments' => $adjustments,
-            'reasons' => StockAdjustment::REASONS,
+            'reasons' => StockAdjustmentDetail::REASONS,
             'reason' => $reason,
             'from' => $from,
             'to' => $to,
@@ -48,7 +49,7 @@ class StockAdjustmentController extends Controller
 
         return view('stock_adjustments.create', [
             'products' => $products,
-            'reasons' => StockAdjustment::REASONS,
+            'reasons' => StockAdjustmentDetail::REASONS,
         ]);
     }
 
@@ -56,27 +57,21 @@ class StockAdjustmentController extends Controller
     {
         $data = $request->validate([
             'adjustment_date' => ['required', 'date'],
-            'reason' => ['required', 'in:'.implode(',', array_keys(StockAdjustment::REASONS))],
             'note' => ['nullable', 'string', 'max:500'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:products,id'],
             'items.*.qty_after' => ['required', 'integer', 'min:0'],
+            'items.*.reason' => ['required', 'in:'.implode(',', array_keys(StockAdjustmentDetail::REASONS))],
+            'items.*.note' => ['nullable', 'string', 'max:255'],
         ], [
             'items.required' => 'Minimal harus ada 1 produk.',
+            'items.*.reason.required' => 'Alasan wajib dipilih untuk setiap produk.',
         ]);
-
-        // Note wajib jika reason = 'lain'
-        if ($data['reason'] === 'lain' && empty($data['note'])) {
-            throw ValidationException::withMessages([
-                'note' => 'Catatan wajib diisi jika alasan = Lain-lain.',
-            ]);
-        }
 
         $adj = DB::transaction(function () use ($data) {
             $adj = StockAdjustment::create([
                 'code' => StockAdjustment::generateCode(),
                 'adjustment_date' => $data['adjustment_date'],
-                'reason' => $data['reason'],
                 'note' => $data['note'] ?? null,
                 'created_by' => Auth::id(),
             ]);
@@ -94,6 +89,13 @@ class StockAdjustmentController extends Controller
                     continue; // skip kalau tidak ada perubahan
                 }
 
+                // Note wajib jika reason = 'lain'
+                if ($item['reason'] === 'lain' && empty($item['note'])) {
+                    throw ValidationException::withMessages([
+                        'items' => "Produk '{$product->name}': catatan wajib diisi kalau alasan = Lain-lain.",
+                    ]);
+                }
+
                 StockAdjustmentDetail::create([
                     'stock_adjustment_id' => $adj->id,
                     'product_id' => $product->id,
@@ -102,6 +104,8 @@ class StockAdjustmentController extends Controller
                     'qty_before' => $before,
                     'qty_after' => $after,
                     'qty_diff' => $diff,
+                    'reason' => $item['reason'],
+                    'note' => $item['note'] ?? null,
                 ]);
 
                 $product->update(['stock' => $after]);
@@ -118,7 +122,7 @@ class StockAdjustmentController extends Controller
 
         return redirect()
             ->route('stock-adjustments.show', $adj)
-            ->with('success', "Adjustment {$adj->code} berhasil. Stok produk telah diperbarui.");
+            ->with('success', "Adjustment {$adj->code} berhasil. {$adj->details()->count()} produk telah diperbarui.");
     }
 
     public function show(StockAdjustment $stockAdjustment): View
