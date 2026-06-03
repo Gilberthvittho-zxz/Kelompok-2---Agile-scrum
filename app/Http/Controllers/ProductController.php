@@ -18,7 +18,7 @@ class ProductController extends Controller
     {
         $q = $request->string('q')->toString();
         $categoryId = $request->integer('category_id');
-        $supplierId = $request->integer('supplier_id'); // <-- 1. PASTIKAN ADA INI
+        $supplierId = $request->integer('supplier_id'); 
 
         $products = Product::query()
             ->with(['category', 'supplier'])
@@ -29,13 +29,13 @@ class ProductController extends Controller
                 });
             })
             ->when($categoryId > 0, fn($query) => $query->where('category_id', $categoryId))
-            ->when($supplierId > 0, fn($query) => $query->where('supplier_id', $supplierId)) // <-- 2. PASTIKAN ADA INI
+            ->when($supplierId > 0, fn($query) => $query->where('supplier_id', $supplierId)) 
             ->orderBy('name')
             ->paginate(10)
             ->withQueryString();
 
         $categories = Category::orderBy('name')->get();
-        $suppliers = Supplier::orderBy('name')->get(); // <-- TAMBAHKAN INI
+        $suppliers = Supplier::orderBy('name')->get(); 
 
 
         return view('products.index', compact('products', 'categories', 'q', 'categoryId', 'suppliers', 'supplierId'));
