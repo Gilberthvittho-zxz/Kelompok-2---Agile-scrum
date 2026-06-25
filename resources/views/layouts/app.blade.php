@@ -198,6 +198,16 @@
             </a>
         </nav>
 
+        <div class="nav-section">Laporan</div>
+        <nav class="nav flex-column">
+            <a class="nav-link {{ request()->routeIs('reports.sales') ? 'active' : '' }}" href="{{ route('reports.sales') }}">
+                <i class="bi bi-file-earmark-bar-graph"></i> Laporan Penjualan
+            </a>
+            <a class="nav-link {{ request()->routeIs('reports.purchases') ? 'active' : '' }}" href="{{ route('reports.purchases') }}">
+                <i class="bi bi-truck"></i> Laporan Pembelian
+            </a>
+        </nav>
+
         <div class="sidebar-footer">
             <i class="bi bi-person-circle"></i>
             <span class="user-name">{{ Auth::user()->name }}</span>
