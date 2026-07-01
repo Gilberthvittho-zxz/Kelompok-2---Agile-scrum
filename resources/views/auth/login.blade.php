@@ -45,9 +45,7 @@
                 </form>
 
                 <hr>
-                <small class="text-muted d-block text-center">
-                    Default akun: <code>admin@motoku.test</code> / <code>password</code>
-                </small>
+                
             </div>
         </div>
     </div>
