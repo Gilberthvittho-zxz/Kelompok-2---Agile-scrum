@@ -1,11 +1,11 @@
 @extends('layouts.app')
-@section('title', 'Adjustment Baru')
+@section('title', 'Waste Baru')
 
 @section('content')
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <h5 class="mb-0"><i class="bi bi-arrow-repeat"></i> Stock Adjustment Baru</h5>
-        <small class="text-muted">Sesuaikan stok produk secara manual. Tiap produk bisa punya alasan berbeda.</small>
+        <h5 class="mb-0"><i class="bi bi-trash3"></i> Catat Waste / Barang Terbuang</h5>
+        <small class="text-muted">Catat barang yang rusak, expired, atau hilang. Stok otomatis berkurang.</small>
     </div>
     <a href="{{ route('stock-adjustments.index') }}" class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-arrow-left"></i> Kembali
@@ -33,7 +33,7 @@
                 </div>
                 <div class="col-md-8">
                     <label class="form-label small text-muted">Catatan Umum (opsional)</label>
-                    <input type="text" name="note" value="{{ old('note') }}" class="form-control form-control-sm" placeholder="Misalnya: hasil opname bulan Mei 2026">
+                    <input type="text" name="note" value="{{ old('note') }}" class="form-control form-control-sm" placeholder="Misalnya: barang rusak gudang bulan Mei 2026">
                 </div>
             </div>
         </div>
@@ -75,19 +75,19 @@
             </div>
         </div>
 
-        {{-- KANAN: DAFTAR ADJUSTMENT --}}
+        {{-- KANAN: DAFTAR WASTE --}}
         <div class="col-lg-7">
             <div class="card shadow-sm border-0">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="text-muted mb-0"><i class="bi bi-list-check"></i> Produk yang Disesuaikan</h6>
-                        <small class="text-muted">Tiap produk bisa punya alasan & catatan berbeda</small>
+                        <h6 class="text-muted mb-0"><i class="bi bi-list-check"></i> Barang yang Dibuang</h6>
+                        <small class="text-muted">Produk sama bisa ditambah beberapa kali (alasan berbeda)</small>
                     </div>
 
                     <div id="adjList">
                         <div id="adjEmpty" class="text-center text-muted py-5 border rounded">
                             <i class="bi bi-arrow-left-circle"></i>
-                            <div class="small mt-2">Pilih produk dari katalog di kiri untuk mulai menyesuaikan stok.</div>
+                            <div class="small mt-2">Pilih produk dari katalog di kiri untuk mulai mencatat waste.</div>
                         </div>
                     </div>
                 </div>
@@ -95,8 +95,8 @@
 
             <div class="d-flex justify-content-end gap-2 mt-3">
                 <a href="{{ route('stock-adjustments.index') }}" class="btn btn-outline-secondary">Batal</a>
-                <button type="submit" id="submitBtn" class="btn btn-success" disabled>
-                    <i class="bi bi-check-circle"></i> Simpan Adjustment
+                <button type="submit" id="submitBtn" class="btn btn-danger" disabled>
+                    <i class="bi bi-check-circle"></i> Simpan Waste
                 </button>
             </div>
         </div>
@@ -109,7 +109,10 @@
 <script>
 (function () {
     const REASONS = @json($reasons);
-    const cart = new Map();
+    // Daftar baris waste. Produk yang sama boleh muncul lebih dari sekali.
+    // Sumber kebenaran tiap baris = `qtyWaste` (Jumlah Dibuang, selalu >= 0 dan mengurangi stok).
+    const lines = [];
+    let seq = 0;
 
     const catalogList = document.getElementById('catalogList');
     const adjList = document.getElementById('adjList');
@@ -130,9 +133,10 @@
         adjList.innerHTML = '';
         inputs.innerHTML = '';
 
-        if (cart.size === 0) {
+        if (lines.length === 0) {
             adjList.appendChild(adjEmpty);
             submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="bi bi-check-circle"></i> Simpan Waste';
             return;
         }
 
@@ -140,15 +144,31 @@
         let allValid = true;
         let idx = 0;
 
-        cart.forEach((item, pid) => {
-            const diff = item.qtyAfter - item.stock;
-            const hasChange = diff !== 0;
+        // Stok berjalan per produk (untuk akumulasi baris produk yang sama).
+        const running = {};
+        const occCount = {};
+        lines.forEach(l => { occCount[l.pid] = (occCount[l.pid] || 0) + 1; });
+        const occSeen = {};
+
+        lines.forEach((item) => {
+            const base = (running[item.pid] === undefined) ? item.origStock : running[item.pid];
+            // Jumlah dibuang tidak boleh melebihi stok yang tersisa.
+            if (item.qtyWaste > base) item.qtyWaste = base;
+            if (item.qtyWaste < 0) item.qtyWaste = 0;
+            const qtyAfter = base - item.qtyWaste;
+            running[item.pid] = qtyAfter;
+
+            const hasChange = item.qtyWaste > 0;
             if (hasChange) anyChanged = true;
             if (hasChange && !item.reason) allValid = false;
+            if (hasChange && item.reason === 'lain' && !item.note) allValid = false;
 
-            const diffClass = diff > 0 ? 'text-success' : (diff < 0 ? 'text-danger' : 'text-muted');
-            const diffSign = diff > 0 ? '+' : '';
-            const rowBg = hasChange ? 'border-primary' : '';
+            occSeen[item.pid] = (occSeen[item.pid] || 0) + 1;
+            const occBadge = occCount[item.pid] > 1
+                ? `<span class="badge bg-secondary-subtle text-secondary ms-1" style="font-size:.65rem">baris ${occSeen[item.pid]}/${occCount[item.pid]}</span>`
+                : '';
+
+            const rowBg = hasChange ? 'border-danger' : '';
 
             const div = document.createElement('div');
             div.className = `border rounded p-3 mb-2 ${rowBg}`;
@@ -157,25 +177,25 @@
                     <img src="${item.image}" class="product-thumb" style="width:36px;height:36px">
                     <div class="flex-grow-1">
                         <div class="text-muted small" style="font-size:.7rem">${item.code || '—'}</div>
-                        <div class="fw-semibold">${item.name}</div>
+                        <div class="fw-semibold">${item.name} ${occBadge}</div>
                     </div>
                     <button type="button" class="btn btn-sm btn-link text-danger p-0 remove-btn" title="Hapus">
                         <i class="bi bi-x-circle"></i>
                     </button>
                 </div>
 
-                <div class="row g-2 align-items-center">
+                <div class="row g-2 align-items-end">
                     <div class="col-md-2">
-                        <label class="form-label small text-muted mb-1">Stok Lama</label>
-                        <div class="form-control form-control-sm bg-light text-center">${item.stock}</div>
+                        <label class="form-label small text-muted mb-1">Stok Saat Ini</label>
+                        <div class="form-control form-control-sm bg-light text-center">${base}</div>
                     </div>
                     <div class="col-md-2">
-                        <label class="form-label small text-muted mb-1">Stok Baru</label>
-                        <input type="number" class="form-control form-control-sm text-center qty-input" min="0" value="${item.qtyAfter}">
+                        <label class="form-label small text-muted mb-1">Jumlah Dibuang <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control form-control-sm text-center fw-bold text-danger waste-input" min="0" max="${base}" value="${item.qtyWaste}">
                     </div>
                     <div class="col-md-2 text-center">
-                        <label class="form-label small text-muted mb-1">Perubahan</label>
-                        <div class="fw-bold ${diffClass} mt-1">${diffSign}${diff}</div>
+                        <label class="form-label small text-muted mb-1">Sisa Stok</label>
+                        <div class="fw-bold mt-1 ${qtyAfter === 0 ? 'text-danger' : ''}">${qtyAfter}</div>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label small text-muted mb-1">
@@ -196,8 +216,8 @@
                 </div>
             `;
 
-            div.querySelector('.qty-input').onchange = (e) => {
-                item.qtyAfter = Math.max(0, parseInt(e.target.value) || 0);
+            div.querySelector('.waste-input').onchange = (e) => {
+                item.qtyWaste = Math.max(0, parseInt(e.target.value) || 0);
                 refresh();
             };
             div.querySelector('.reason-select').onchange = (e) => {
@@ -208,15 +228,16 @@
                 item.note = e.target.value;
             };
             div.querySelector('.remove-btn').onclick = () => {
-                cart.delete(pid);
+                const i = lines.indexOf(item);
+                if (i > -1) lines.splice(i, 1);
                 refresh();
             };
             adjList.appendChild(div);
 
             if (hasChange) {
                 inputs.insertAdjacentHTML('beforeend',
-                    `<input type="hidden" name="items[${idx}][product_id]" value="${pid}">
-                     <input type="hidden" name="items[${idx}][qty_after]" value="${item.qtyAfter}">
+                    `<input type="hidden" name="items[${idx}][product_id]" value="${item.pid}">
+                     <input type="hidden" name="items[${idx}][qty_after]" value="${qtyAfter}">
                      <input type="hidden" name="items[${idx}][reason]" value="${item.reason || ''}">
                      <input type="hidden" name="items[${idx}][note]" value="${item.note || ''}">`);
                 idx++;
@@ -225,13 +246,12 @@
 
         submitBtn.disabled = !anyChanged || !allValid;
 
-        // Hint button text
         if (!anyChanged) {
-            submitBtn.innerHTML = '<i class="bi bi-info-circle"></i> Ubah stok minimal 1 produk';
+            submitBtn.innerHTML = '<i class="bi bi-info-circle"></i> Isi jumlah dibuang minimal 1 baris';
         } else if (!allValid) {
-            submitBtn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Lengkapi alasan untuk semua produk';
+            submitBtn.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Lengkapi alasan/catatan tiap baris';
         } else {
-            submitBtn.innerHTML = `<i class="bi bi-check-circle"></i> Simpan Adjustment (${idx} produk)`;
+            submitBtn.innerHTML = `<i class="bi bi-check-circle"></i> Simpan Waste (${idx} baris)`;
         }
     }
 
@@ -239,19 +259,15 @@
         const item = e.target.closest('.catalog-item');
         if (!item) return;
         const pid = parseInt(item.dataset.id);
-        if (cart.has(pid)) {
-            // sudah ada → scroll ke item itu di kanan
-            alert('Produk sudah ada di daftar.');
-            return;
-        }
         const stock = parseInt(item.dataset.stock);
-        cart.set(pid, {
-            id: pid,
+        lines.push({
+            lineId: ++seq,
+            pid: pid,
             name: item.dataset.name,
             code: item.dataset.code,
             image: item.dataset.image,
-            stock: stock,
-            qtyAfter: stock,    // default sama dengan stok awal (user ubah dari sini)
+            origStock: stock,
+            qtyWaste: 0,
             reason: '',
             note: '',
         });
@@ -272,7 +288,7 @@
 </script>
 <style>
 .catalog-item { transition: all .15s ease; }
-.catalog-item:hover { border-color: #3b82f6 !important; background: #f0f7ff; }
+.catalog-item:hover { border-color: #ef4444 !important; background: #fef2f2; }
 </style>
 @endpush
 @endsection

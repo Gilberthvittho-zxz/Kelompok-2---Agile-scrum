@@ -7,10 +7,21 @@
         <h3 class="mb-0"><i class="bi bi-truck"></i> Supplier</h3>
         <small class="text-muted">Daftar pemasok sparepart beserta kontaknya.</small>
     </div>
-    <a href="{{ route('suppliers.create') }}" class="btn btn-dark">
-        <i class="bi bi-plus-lg"></i> Tambah Supplier
-    </a>
+    <div class="d-flex gap-2">
+        <a href="{{ route('suppliers.template') }}" class="btn btn-outline-secondary"><i class="bi bi-download"></i> Template</a>
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#importModal"><i class="bi bi-upload"></i> Import</button>
+        <a href="{{ route('suppliers.create') }}" class="btn btn-dark">
+            <i class="bi bi-plus-lg"></i> Tambah Supplier
+        </a>
+    </div>
 </div>
+
+@include('partials.import-modal', [
+    'entity' => 'Supplier',
+    'importRoute' => route('suppliers.import'),
+    'templateRoute' => route('suppliers.template'),
+    'columns' => 'name, contact_person, email, phone, address',
+])
 
 <div class="card shadow-sm border-0">
     <div class="card-body">

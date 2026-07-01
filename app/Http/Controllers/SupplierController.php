@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\HandlesCsv;
 use App\Models\Supplier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class SupplierController extends Controller
 {
+    use HandlesCsv;
+
     public function index(Request $request): View
     {
         $q = $request->string('q')->toString();
@@ -75,6 +79,14 @@ class SupplierController extends Controller
             return back()->with('error', 'Password salah. Aksi dibatalkan.');
         }
 
+        if ($supplier->products()->exists()) {
+            return back()->with('error', 'Supplier tidak bisa dihapus karena masih dipakai oleh produk.');
+        }
+
+        if (\App\Models\Purchase::where('supplier_id', $supplier->id)->exists()) {
+            return back()->with('error', 'Supplier tidak bisa dihapus karena sudah ada transaksi pembelian.');
+        }
+
         $supplier->delete();
 
         return redirect()
@@ -111,5 +123,51 @@ class SupplierController extends Controller
         $data['is_active'] = $request->boolean('is_active', $request->isMethod('post'));
 
         return $data;
+    }
+
+    /**
+     * Download template CSV untuk import supplier.
+     */
+    public function template(): StreamedResponse
+    {
+        return $this->streamCsv('template-supplier.xlsx',
+            ['name', 'contact_person', 'email', 'phone', 'address'],
+            [['Contoh Supplier', 'Budi', 'budi@email.com', '08123456789', 'Jl. Contoh No. 1']],
+        );
+    }
+
+    /**
+     * Import supplier dari file CSV (upsert berdasarkan nama).
+     */
+    public function import(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv'],
+        ], [], ['file' => 'File CSV']);
+
+        $rows = $this->readCsv($request->file('file'));
+        $created = 0;
+        $updated = 0;
+        $skipped = 0;
+
+        foreach ($rows as $row) {
+            $name = trim($row[0] ?? '');
+            if ($name === '') {
+                $skipped++;
+                continue;
+            }
+            $supplier = Supplier::updateOrCreate(
+                ['name' => $name],
+                [
+                    'contact_person' => $row[1] ?? null,
+                    'email' => $row[2] ?? null,
+                    'phone' => $row[3] ?? null,
+                    'address' => $row[4] ?? null,
+                ],
+            );
+            $supplier->wasRecentlyCreated ? $created++ : $updated++;
+        }
+
+        return back()->with('success', "Import selesai: {$created} ditambah, {$updated} diperbarui".($skipped ? ", {$skipped} dilewati" : '').'.');
     }
 }

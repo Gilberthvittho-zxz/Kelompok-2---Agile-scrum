@@ -2,8 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\HandlesCsv;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\PurchaseDetail;
+use App\Models\SalesTransactionDetail;
+use App\Models\StockAdjustmentDetail;
+use App\Models\StockOpnameDetail;
 use App\Models\Supplier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -11,9 +16,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ProductController extends Controller
 {
+    use HandlesCsv;
+
     public function index(Request $request): View
     {
         $q = $request->string('q')->toString();
@@ -116,6 +124,10 @@ class ProductController extends Controller
             return back()->with('error', 'Password salah. Aksi dibatalkan.');
         }
 
+        if ($this->productHasTransactions($product)) {
+            return back()->with('error', 'Produk tidak bisa dihapus karena sudah dipakai di transaksi penjualan, pembelian, waste, atau stock opname.');
+        }
+
         $product->delete();
 
         return redirect()
@@ -162,5 +174,78 @@ class ProductController extends Controller
         $data['is_active'] = $request->boolean('is_active', $request->isMethod('post'));
 
         return $data;
+    }
+
+    /**
+     * Apakah produk sudah pernah dipakai di transaksi/waste/opname mana pun.
+     */
+    private function productHasTransactions(Product $product): bool
+    {
+        return SalesTransactionDetail::where('product_id', $product->id)->exists()
+            || PurchaseDetail::where('product_id', $product->id)->exists()
+            || StockAdjustmentDetail::where('product_id', $product->id)->exists()
+            || StockOpnameDetail::where('product_id', $product->id)->exists();
+    }
+
+    /**
+     * Download template CSV untuk import produk.
+     */
+    public function template(): StreamedResponse
+    {
+        return $this->streamCsv('template-produk.xlsx',
+            ['code', 'name', 'description', 'category', 'supplier', 'purchase_price', 'selling_price', 'stock', 'min_stock'],
+            [['PRD-001', 'Contoh Produk', 'Deskripsi opsional', 'Nama Kategori', 'Nama Supplier', '10000', '15000', '0', '5']],
+        );
+    }
+
+    /**
+     * Import produk dari file CSV. Kategori & supplier dicocokkan berdasarkan nama
+     * (dibuat otomatis jika belum ada). Upsert produk berdasarkan kode.
+     */
+    public function import(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx,xls,csv'],
+        ], [], ['file' => 'File CSV']);
+
+        $rows = $this->readCsv($request->file('file'));
+        $created = 0;
+        $updated = 0;
+        $skipped = 0;
+
+        foreach ($rows as $row) {
+            $code = trim($row[0] ?? '');
+            $name = trim($row[1] ?? '');
+            $categoryName = trim($row[3] ?? '');
+
+            // kode, nama, dan kategori wajib ada
+            if ($code === '' || $name === '' || $categoryName === '') {
+                $skipped++;
+                continue;
+            }
+
+            $category = Category::firstOrCreate(['name' => $categoryName], ['is_active' => true]);
+            $supplierName = trim($row[4] ?? '');
+            $supplier = $supplierName !== ''
+                ? Supplier::firstOrCreate(['name' => $supplierName], ['is_active' => true])
+                : null;
+
+            $product = Product::updateOrCreate(
+                ['code' => $code],
+                [
+                    'name' => $name,
+                    'description' => $row[2] ?? null,
+                    'category_id' => $category->id,
+                    'supplier_id' => $supplier?->id,
+                    'purchase_price' => $this->csvNumber($row[5] ?? '0'),
+                    'selling_price' => $this->csvNumber($row[6] ?? '0'),
+                    'stock' => (int) ($row[7] ?? 0),
+                    'min_stock' => (int) ($row[8] ?? 0),
+                ],
+            );
+            $product->wasRecentlyCreated ? $created++ : $updated++;
+        }
+
+        return back()->with('success', "Import selesai: {$created} ditambah, {$updated} diperbarui".($skipped ? ", {$skipped} dilewati (kode/nama/kategori kosong)" : '').'.');
     }
 }

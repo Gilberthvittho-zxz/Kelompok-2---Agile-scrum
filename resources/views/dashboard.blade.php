@@ -138,43 +138,6 @@
     @endif
 </div>
 
-{{-- ===== Ringkasan Master Data ===== --}}
-<div class="row g-3">
-    <div class="col-md-4">
-        <div class="card stat-card shadow-sm">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div class="stat-icon bg-secondary bg-opacity-10 text-secondary"><i class="bi bi-tags"></i></div>
-                <div>
-                    <h6 class="text-muted small mb-1">Total Kategori</h6>
-                    <h5 class="fw-bold mb-0">{{ $stats['categories'] }}</h5>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card stat-card shadow-sm">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div class="stat-icon bg-secondary bg-opacity-10 text-secondary"><i class="bi bi-truck"></i></div>
-                <div>
-                    <h6 class="text-muted small mb-1">Total Supplier</h6>
-                    <h5 class="fw-bold mb-0">{{ $stats['suppliers'] }}</h5>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card stat-card shadow-sm">
-            <div class="card-body d-flex align-items-center gap-3">
-                <div class="stat-icon bg-secondary bg-opacity-10 text-secondary"><i class="bi bi-box-seam"></i></div>
-                <div>
-                    <h6 class="text-muted small mb-1">Total Produk</h6>
-                    <h5 class="fw-bold mb-0">{{ $stats['products'] }}</h5>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>

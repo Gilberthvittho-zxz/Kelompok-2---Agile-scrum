@@ -26,6 +26,17 @@ class StockAdjustmentDetail extends Model
         'lain'    => 'Lain-lain',
     ];
 
+    /**
+     * Alasan untuk pencatatan Waste (barang terbuang) — hanya kondisi yang
+     * mengurangi stok. 'koreksi' & 'opname' tidak dipakai di sini.
+     */
+    public const WASTE_REASONS = [
+        'rusak'   => 'Barang Rusak',
+        'expired' => 'Barang Expired',
+        'hilang'  => 'Barang Hilang',
+        'lain'    => 'Lain-lain',
+    ];
+
     public function adjustment(): BelongsTo
     {
         return $this->belongsTo(StockAdjustment::class, 'stock_adjustment_id');

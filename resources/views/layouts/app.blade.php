@@ -9,7 +9,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <style>
-        :root { --sidebar-w: 240px; }
+        :root { --sidebar-w: 270px; }
         body { background: #f5f7fb; }
 
         /* ===== Sidebar ===== */
@@ -51,6 +51,34 @@
             border-left-color: #3b82f6;
             font-weight: 600;
         }
+        /* ===== Grup dropdown sidebar ===== */
+        .app-sidebar .nav-group-toggle {
+            width: 100%;
+            background: transparent;
+            border: 0;
+            color: #e5e7eb;
+            font-size: .82rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .6px;
+            padding: .75rem 1.25rem .5rem;
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            text-align: left;
+        }
+        .app-sidebar .nav-group-toggle i:not(.chevron) { font-size: 1.05rem; width: 18px; text-align: center; }
+        .app-sidebar .nav-group-toggle:hover { color: #fff; }
+        /* Link tunggal (Dashboard, Laporan) disamakan dengan header grup */
+        .app-sidebar .nav-link.nav-link-strong {
+            color: #e5e7eb;
+            font-size: .82rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .6px;
+        }
+        .app-sidebar .nav-group-toggle .chevron { margin-left: auto; font-size: .75rem; transition: transform .2s ease; }
+        .app-sidebar .nav-group-toggle[aria-expanded="false"] .chevron { transform: rotate(-90deg); }
         .app-sidebar .sidebar-footer {
             margin-top: auto;
             padding: 1rem 1.25rem;
@@ -158,53 +186,73 @@
             <small>Inventory Sparepart Motor</small>
         </div>
 
-        <div class="nav-section">Menu Utama</div>
         <nav class="nav flex-column">
-            <a class="nav-link {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}">
+            <a class="nav-link nav-link-strong {{ request()->routeIs('dashboard') ? 'active' : '' }}" href="{{ route('dashboard') }}">
                 <i class="bi bi-speedometer2"></i> Dashboard
             </a>
         </nav>
 
-        <div class="nav-section">Data Master</div>
-        <nav class="nav flex-column">
-            <a class="nav-link {{ request()->routeIs('categories.*') ? 'active' : '' }}" href="{{ route('categories.index') }}">
-                <i class="bi bi-tags"></i> Kategori
-            </a>
-            <a class="nav-link {{ request()->routeIs('suppliers.*') ? 'active' : '' }}" href="{{ route('suppliers.index') }}">
-                <i class="bi bi-truck"></i> Supplier
-            </a>
-            <a class="nav-link {{ request()->routeIs('products.*') ? 'active' : '' }}" href="{{ route('products.index') }}">
-                <i class="bi bi-box-seam"></i> Produk
-            </a>
-        </nav>
+        @php
+            $masterActive = request()->routeIs('categories.*', 'suppliers.*', 'products.*');
+            $trxActive = request()->routeIs('sales.*', 'purchases.*');
+            $invActive = request()->routeIs('stocks.*', 'stock-opnames.*', 'stock-adjustments.*');
+        @endphp
 
-        <div class="nav-section">Transaksi</div>
-        <nav class="nav flex-column">
-            <a class="nav-link {{ request()->routeIs('sales.*') ? 'active' : '' }}" href="{{ route('sales.index') }}">
-                <i class="bi bi-cart-check"></i> Penjualan
-            </a>
-            <a class="nav-link {{ request()->routeIs('purchases.*') ? 'active' : '' }}" href="{{ route('purchases.index') }}">
-                <i class="bi bi-box-arrow-in-down"></i> Pembelian
-            </a>
-        </nav>
+        {{-- Data Master --}}
+        <button class="nav-group-toggle" data-bs-toggle="collapse" data-bs-target="#grpMaster" aria-expanded="{{ $masterActive ? 'true' : 'false' }}">
+            <i class="bi bi-collection"></i> Data Master <i class="bi bi-chevron-down chevron"></i>
+        </button>
+        <div class="collapse {{ $masterActive ? 'show' : '' }}" id="grpMaster">
+            <nav class="nav flex-column">
+                <a class="nav-link {{ request()->routeIs('categories.*') ? 'active' : '' }}" href="{{ route('categories.index') }}">
+                    <i class="bi bi-tags"></i> Kategori
+                </a>
+                <a class="nav-link {{ request()->routeIs('suppliers.*') ? 'active' : '' }}" href="{{ route('suppliers.index') }}">
+                    <i class="bi bi-truck"></i> Supplier
+                </a>
+                <a class="nav-link {{ request()->routeIs('products.*') ? 'active' : '' }}" href="{{ route('products.index') }}">
+                    <i class="bi bi-box-seam"></i> Produk
+                </a>
+            </nav>
+        </div>
 
-        <div class="nav-section">Inventory</div>
-        <nav class="nav flex-column">
-            <a class="nav-link {{ request()->routeIs('stocks.*') ? 'active' : '' }}" href="{{ route('stocks.index') }}">
-                <i class="bi bi-clipboard-data"></i> Stok
-            </a>
-            <a class="nav-link {{ request()->routeIs('stock-adjustments.*') ? 'active' : '' }}" href="{{ route('stock-adjustments.index') }}">
-                <i class="bi bi-arrow-repeat"></i> Stock Adjustment
-            </a>
-        </nav>
+        {{-- Transaksi --}}
+        <button class="nav-group-toggle" data-bs-toggle="collapse" data-bs-target="#grpTrx" aria-expanded="{{ $trxActive ? 'true' : 'false' }}">
+            <i class="bi bi-arrow-left-right"></i> Transaksi <i class="bi bi-chevron-down chevron"></i>
+        </button>
+        <div class="collapse {{ $trxActive ? 'show' : '' }}" id="grpTrx">
+            <nav class="nav flex-column">
+                <a class="nav-link {{ request()->routeIs('sales.*') ? 'active' : '' }}" href="{{ route('sales.index') }}">
+                    <i class="bi bi-cart-check"></i> Penjualan
+                </a>
+                <a class="nav-link {{ request()->routeIs('purchases.*') ? 'active' : '' }}" href="{{ route('purchases.index') }}">
+                    <i class="bi bi-box-arrow-in-down"></i> Pembelian
+                </a>
+            </nav>
+        </div>
 
-        <div class="nav-section">Laporan</div>
-        <nav class="nav flex-column">
-            <a class="nav-link {{ request()->routeIs('reports.sales') ? 'active' : '' }}" href="{{ route('reports.sales') }}">
-                <i class="bi bi-file-earmark-bar-graph"></i> Laporan Penjualan
-            </a>
-            <a class="nav-link {{ request()->routeIs('reports.purchases') ? 'active' : '' }}" href="{{ route('reports.purchases') }}">
-                <i class="bi bi-truck"></i> Laporan Pembelian
+        {{-- Inventory --}}
+        <button class="nav-group-toggle" data-bs-toggle="collapse" data-bs-target="#grpInv" aria-expanded="{{ $invActive ? 'true' : 'false' }}">
+            <i class="bi bi-boxes"></i> Inventory <i class="bi bi-chevron-down chevron"></i>
+        </button>
+        <div class="collapse {{ $invActive ? 'show' : '' }}" id="grpInv">
+            <nav class="nav flex-column">
+                <a class="nav-link {{ request()->routeIs('stocks.*') ? 'active' : '' }}" href="{{ route('stocks.index') }}">
+                    <i class="bi bi-clipboard-data"></i> Saldo Stok
+                </a>
+                <a class="nav-link {{ request()->routeIs('stock-opnames.*') ? 'active' : '' }}" href="{{ route('stock-opnames.index') }}">
+                    <i class="bi bi-clipboard-check"></i> Stock Opname
+                </a>
+                <a class="nav-link {{ request()->routeIs('stock-adjustments.*') ? 'active' : '' }}" href="{{ route('stock-adjustments.index') }}">
+                    <i class="bi bi-trash3"></i> Waste
+                </a>
+            </nav>
+        </div>
+
+        {{-- Laporan (langsung ke halaman) --}}
+        <nav class="nav flex-column mt-2">
+            <a class="nav-link nav-link-strong {{ request()->routeIs('reports.*') ? 'active' : '' }}" href="{{ route('reports.index') }}">
+                <i class="bi bi-file-earmark-bar-graph"></i> Laporan
             </a>
         </nav>
 

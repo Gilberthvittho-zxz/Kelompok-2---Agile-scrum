@@ -129,21 +129,30 @@
                     </small>
                 @endif
 
-                @if(! $purchase->isVoided())
-                    <button type="button" class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#voidModal">
-                        <i class="bi bi-x-octagon"></i> Void Pembelian
-                    </button>
-                @else
+                @if($purchase->isVoided())
                     <div class="alert alert-secondary mb-0 small">
                         <i class="bi bi-info-circle"></i> Pembelian sudah di-void.
                     </div>
+                @elseif($lockingOpname)
+                    <button type="button" class="btn btn-outline-secondary w-100" disabled>
+                        <i class="bi bi-lock"></i> Void Pembelian
+                    </button>
+                    <div class="alert alert-warning mb-0 small mt-2">
+                        <i class="bi bi-lock-fill"></i> Tidak bisa di-void karena sudah ada
+                        <strong>Stock Opname {{ $lockingOpname->code }}</strong>
+                        ({{ $lockingOpname->opname_date->format('d M Y') }}) setelah tanggal pembelian ini.
+                    </div>
+                @else
+                    <button type="button" class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#voidModal">
+                        <i class="bi bi-x-octagon"></i> Void Pembelian
+                    </button>
                 @endif
             </div>
         </div>
     </div>
 </div>
 
-@if(! $purchase->isVoided())
+@if(! $purchase->isVoided() && ! $lockingOpname)
 <div class="modal fade" id="voidModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <form method="POST" action="{{ route('purchases.void', $purchase) }}" class="modal-content">

@@ -5,10 +5,12 @@ namespace App\Http\Controllers;
 use App\Models\Product;
 use App\Models\StockAdjustment;
 use App\Models\StockAdjustmentDetail;
+use App\Models\StockOpname;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
@@ -49,7 +51,7 @@ class StockAdjustmentController extends Controller
 
         return view('stock_adjustments.create', [
             'products' => $products,
-            'reasons' => StockAdjustmentDetail::REASONS,
+            'reasons' => StockAdjustmentDetail::WASTE_REASONS,
         ]);
     }
 
@@ -61,7 +63,7 @@ class StockAdjustmentController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'exists:products,id'],
             'items.*.qty_after' => ['required', 'integer', 'min:0'],
-            'items.*.reason' => ['required', 'in:'.implode(',', array_keys(StockAdjustmentDetail::REASONS))],
+            'items.*.reason' => ['required', 'in:'.implode(',', array_keys(StockAdjustmentDetail::WASTE_REASONS))],
             'items.*.note' => ['nullable', 'string', 'max:255'],
         ], [
             'items.required' => 'Minimal harus ada 1 produk.',
@@ -131,6 +133,34 @@ class StockAdjustmentController extends Controller
 
         return view('stock_adjustments.show', [
             'adjustment' => $stockAdjustment,
+            'lockingOpname' => StockOpname::lockingSince($stockAdjustment->adjustment_date),
         ]);
+    }
+
+    public function destroy(Request $request, StockAdjustment $stockAdjustment): RedirectResponse
+    {
+        if (! Hash::check($request->input('confirm_password', ''), Auth::user()->password)) {
+            return back()->with('error', 'Password salah. Aksi dibatalkan.');
+        }
+
+        if ($opname = StockOpname::lockingSince($stockAdjustment->adjustment_date)) {
+            return back()->with('error', "Tidak bisa dihapus: sudah ada Stock Opname ({$opname->code}, {$opname->opname_date->format('d M Y')}) setelah tanggal waste ini.");
+        }
+
+        DB::transaction(function () use ($stockAdjustment) {
+            // Kembalikan stok yang sempat terbuang (balik dari qty_diff).
+            foreach ($stockAdjustment->details as $detail) {
+                $product = Product::lockForUpdate()->find($detail->product_id);
+                if ($product) {
+                    $product->increment('stock', -1 * (int) $detail->qty_diff);
+                }
+            }
+
+            $stockAdjustment->delete(); // detail ikut terhapus (cascade)
+        });
+
+        return redirect()
+            ->route('stock-adjustments.index')
+            ->with('success', "Waste {$stockAdjustment->code} berhasil dihapus. Stok produk telah dikembalikan.");
     }
 }

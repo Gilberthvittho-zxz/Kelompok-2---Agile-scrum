@@ -7,6 +7,7 @@ use App\Models\PaymentMethod;
 use App\Models\Product;
 use App\Models\SalesTransaction;
 use App\Models\SalesTransactionDetail;
+use App\Models\StockOpname;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -180,13 +181,20 @@ class SalesController extends Controller
     {
         $sale->load(['paymentMethod', 'details.product', 'creator', 'voider']);
 
-        return view('sales.show', ['sale' => $sale]);
+        return view('sales.show', [
+            'sale' => $sale,
+            'lockingOpname' => StockOpname::lockingSince($sale->transaction_date),
+        ]);
     }
 
     public function void(Request $request, SalesTransaction $sale): RedirectResponse
     {
         if ($sale->isVoided()) {
             return back()->with('error', 'Transaksi sudah pernah di-void sebelumnya.');
+        }
+
+        if ($opname = StockOpname::lockingSince($sale->transaction_date)) {
+            return back()->with('error', "Tidak bisa void: sudah ada Stock Opname ({$opname->code}, {$opname->opname_date->format('d M Y')}) setelah tanggal transaksi ini. Stok sudah dihitung ulang, jadi transaksi ini terkunci.");
         }
 
         $data = $request->validate([

@@ -2,11 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Category;
 use App\Models\Product;
 use App\Models\SalesTransaction;
 use App\Models\SalesTransactionDetail;
-use App\Models\Supplier;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -16,12 +14,9 @@ class DashboardController extends Controller
     {
         $today = now()->startOfDay();
 
-        // ===== Statistik dasar master data =====
+        // ===== Statistik dasar =====
         $stats = [
-            'categories' => Category::count(),
-            'suppliers'  => Supplier::count(),
-            'products'   => Product::count(),
-            'low_stock'  => Product::where('is_active', true)->whereColumn('stock', '<=', 'min_stock')->count(),
+            'low_stock' => Product::where('is_active', true)->whereColumn('stock', '<=', 'min_stock')->count(),
         ];
 
         // ===== Ringkasan transaksi penjualan hari ini =====

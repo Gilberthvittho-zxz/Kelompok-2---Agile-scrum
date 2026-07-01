@@ -6,6 +6,7 @@ use App\Models\Category;
 use App\Models\Product;
 use App\Models\Purchase;
 use App\Models\PurchaseDetail;
+use App\Models\StockOpname;
 use App\Models\Supplier;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -199,13 +200,20 @@ class PurchaseController extends Controller
     {
         $purchase->load(['supplier', 'details.product', 'creator', 'voider']);
 
-        return view('purchases.show', ['purchase' => $purchase]);
+        return view('purchases.show', [
+            'purchase' => $purchase,
+            'lockingOpname' => StockOpname::lockingSince($purchase->purchase_date),
+        ]);
     }
 
     public function void(Request $request, Purchase $purchase): RedirectResponse
     {
         if ($purchase->isVoided()) {
             return back()->with('error', 'Pembelian sudah pernah di-void sebelumnya.');
+        }
+
+        if ($opname = StockOpname::lockingSince($purchase->purchase_date)) {
+            return back()->with('error', "Tidak bisa void: sudah ada Stock Opname ({$opname->code}, {$opname->opname_date->format('d M Y')}) setelah tanggal pembelian ini. Stok sudah dihitung ulang, jadi pembelian ini terkunci.");
         }
 
         $data = $request->validate([

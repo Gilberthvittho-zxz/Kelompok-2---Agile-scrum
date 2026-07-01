@@ -1,14 +1,14 @@
 @extends('layouts.app')
-@section('title', 'Stock Adjustment')
+@section('title', 'Waste')
 
 @section('content')
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <h5 class="mb-0"><i class="bi bi-arrow-repeat"></i> Stock Adjustment</h5>
-        <small class="text-muted">Koreksi stok manual untuk kondisi di luar transaksi normal.</small>
+        <h5 class="mb-0"><i class="bi bi-trash3"></i> Waste / Barang Terbuang</h5>
+        <small class="text-muted">Riwayat pencatatan barang rusak, expired, atau hilang.</small>
     </div>
-    <a href="{{ route('stock-adjustments.create') }}" class="btn btn-sm btn-dark">
-        <i class="bi bi-plus-lg"></i> Adjustment Baru
+    <a href="{{ route('stock-adjustments.create') }}" class="btn btn-sm btn-danger">
+        <i class="bi bi-plus-lg"></i> Catat Waste
     </a>
 </div>
 
@@ -62,7 +62,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="7" class="text-center text-muted py-4">Belum ada adjustment.</td></tr>
+                        <tr><td colspan="7" class="text-center text-muted py-4">Belum ada catatan waste.</td></tr>
                     @endforelse
                 </tbody>
             </table>

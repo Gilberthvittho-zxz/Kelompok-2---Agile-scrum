@@ -2,31 +2,177 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\HandlesCsv;
 use App\Models\SalesTransaction;
 use App\Models\SalesTransactionDetail;
 use App\Models\Purchase;
 use App\Models\PurchaseDetail;
+use App\Models\StockAdjustment;
+use App\Models\StockAdjustmentDetail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class ReportController extends Controller
 {
+    use HandlesCsv;
+
     /**
-     * Laporan Penjualan: query transaksi penjualan dengan filter rentang tanggal,
-     * lengkap dengan detail item per transaksi & rekap produk terjual.
+     * Hub laporan: halaman berisi kartu menuju tiap jenis laporan.
+     */
+    public function index(): View
+    {
+        return view('reports.index');
+    }
+
+    /**
+     * Laporan Penjualan.
      */
     public function sales(Request $request): View
     {
-        // Default rentang tanggal: awal bulan ini s.d. hari ini
+        [$from, $to] = $this->range($request);
+
+        return view('reports.sales', array_merge(
+            ['from' => $from, 'to' => $to],
+            $this->salesData($from, $to),
+        ));
+    }
+
+    /**
+     * Laporan Pembelian.
+     */
+    public function purchases(Request $request): View
+    {
+        [$from, $to] = $this->range($request);
+
+        return view('reports.purchases', array_merge(
+            ['from' => $from, 'to' => $to],
+            $this->purchasesData($from, $to),
+        ));
+    }
+
+    /**
+     * Laporan Waste (barang terbuang).
+     */
+    public function waste(Request $request): View
+    {
+        [$from, $to] = $this->range($request);
+
+        return view('reports.waste', array_merge(
+            ['from' => $from, 'to' => $to, 'reasons' => StockAdjustmentDetail::REASONS],
+            $this->wasteData($from, $to),
+        ));
+    }
+
+    /**
+     * Export Laporan Penjualan ke CSV (per transaksi).
+     */
+    public function salesExport(Request $request): StreamedResponse
+    {
+        [$from, $to] = $this->range($request);
+        $d = $this->salesData($from, $to);
+
+        $rows = $d['transactions']->map(fn ($tx) => [
+            $tx->code,
+            $tx->transaction_date->format('Y-m-d H:i'),
+            $tx->customer_name ?: '-',
+            $tx->totalItems(),
+            $tx->paymentMethod->name,
+            (int) $tx->discount,
+            (int) $tx->total,
+        ]);
+
+        return $this->streamCsv(
+            "laporan-penjualan_{$from}_sd_{$to}.xlsx",
+            ['Kode', 'Tanggal', 'Pelanggan', 'Jumlah Item', 'Metode Bayar', 'Diskon', 'Total'],
+            $rows,
+        );
+    }
+
+    /**
+     * Export Laporan Pembelian ke CSV (per transaksi).
+     */
+    public function purchasesExport(Request $request): StreamedResponse
+    {
+        [$from, $to] = $this->range($request);
+        $d = $this->purchasesData($from, $to);
+
+        $rows = $d['purchases']->map(fn ($p) => [
+            $p->code,
+            $p->purchase_date->format('Y-m-d'),
+            $p->supplier->name,
+            $p->invoice_number ?: '-',
+            $p->totalItems(),
+            $p->isPending() ? 'Pending' : 'Confirmed',
+            (int) $p->total,
+        ]);
+
+        return $this->streamCsv(
+            "laporan-pembelian_{$from}_sd_{$to}.xlsx",
+            ['Kode', 'Tgl Beli', 'Supplier', 'Invoice', 'Jumlah Item', 'Status', 'Total'],
+            $rows,
+        );
+    }
+
+    /**
+     * Export Laporan Waste ke CSV (per item terbuang).
+     */
+    public function wasteExport(Request $request): StreamedResponse
+    {
+        [$from, $to] = $this->range($request);
+        $d = $this->wasteData($from, $to);
+
+        $rows = [];
+        foreach ($d['adjustments'] as $adj) {
+            foreach ($adj->details as $det) {
+                if ($det->qty_diff >= 0) {
+                    continue;
+                }
+                $rows[] = [
+                    $adj->code,
+                    $adj->adjustment_date->format('Y-m-d H:i'),
+                    $det->product_name_snapshot,
+                    $det->product_code_snapshot,
+                    $det->qty_before,
+                    $det->qty_after,
+                    -$det->qty_diff,
+                    $det->reasonLabel(),
+                    $det->note ?: '-',
+                ];
+            }
+        }
+
+        return $this->streamCsv(
+            "laporan-waste_{$from}_sd_{$to}.xlsx",
+            ['Kode', 'Tanggal', 'Produk', 'Kode Produk', 'Stok Sebelum', 'Stok Sesudah', 'Terbuang', 'Alasan', 'Catatan'],
+            $rows,
+        );
+    }
+
+    /**
+     * Normalisasi rentang tanggal: default awal bulan s.d. hari ini,
+     * tukar otomatis jika awal > akhir.
+     *
+     * @return array{0:string,1:string}
+     */
+    private function range(Request $request): array
+    {
         $from = $request->string('from')->toString() ?: now()->startOfMonth()->format('Y-m-d');
         $to   = $request->string('to')->toString() ?: now()->format('Y-m-d');
 
-        // Jaga-jaga: kalau user input tanggal awal > tanggal akhir, otomatis ditukar
         if ($from > $to) {
             [$from, $to] = [$to, $from];
         }
 
+        return [$from, $to];
+    }
+
+    /**
+     * Data laporan penjualan untuk rentang tanggal tertentu.
+     */
+    private function salesData(string $from, string $to): array
+    {
         $transactions = SalesTransaction::query()
             ->with(['paymentMethod', 'details', 'creator'])
             ->whereDate('transaction_date', '>=', $from)
@@ -36,7 +182,7 @@ class ReportController extends Controller
             ->orderBy('id')
             ->get();
 
-        $summary = [
+        $salesSummary = [
             'total_transaksi' => $transactions->count(),
             'total_omzet'     => (float) $transactions->sum('total'),
             'total_item'      => (int) $transactions->sum(fn ($tx) => $tx->details->sum('qty')),
@@ -45,8 +191,7 @@ class ReportController extends Controller
                 : 0,
         ];
 
-        // Rekap produk terjual (group per produk) dalam rentang tanggal yang sama
-        $productRecap = SalesTransactionDetail::query()
+        $salesProductRecap = SalesTransactionDetail::query()
             ->select(
                 'product_id',
                 'product_name_snapshot',
@@ -63,23 +208,24 @@ class ReportController extends Controller
             ->orderByDesc('total_qty')
             ->get();
 
-        return view('reports.sales', compact('transactions', 'summary', 'productRecap', 'from', 'to'));
+        $paymentRecap = SalesTransaction::query()
+            ->select('payment_method_id', DB::raw('COUNT(*) as total_transaksi'), DB::raw('SUM(total) as total_omzet'))
+            ->with('paymentMethod')
+            ->whereDate('transaction_date', '>=', $from)
+            ->whereDate('transaction_date', '<=', $to)
+            ->where('status', 'confirmed')
+            ->groupBy('payment_method_id')
+            ->orderByDesc('total_omzet')
+            ->get();
+
+        return compact('transactions', 'salesSummary', 'salesProductRecap', 'paymentRecap');
     }
 
     /**
-     * Laporan Pembelian: query transaksi pembelian dengan filter rentang tanggal,
-     * lengkap dengan detail item, rekap produk dibeli, & rekap per supplier.
+     * Data laporan pembelian untuk rentang tanggal tertentu.
      */
-    public function purchases(Request $request): View
+    private function purchasesData(string $from, string $to): array
     {
-        $from = $request->string('from')->toString() ?: now()->startOfMonth()->format('Y-m-d');
-        $to   = $request->string('to')->toString() ?: now()->format('Y-m-d');
-
-        if ($from > $to) {
-            [$from, $to] = [$to, $from];
-        }
-
-        // Pending & confirmed dihitung (barang sudah dipesan/tiba), voided tidak
         $purchases = Purchase::query()
             ->with(['supplier', 'details', 'creator'])
             ->whereDate('purchase_date', '>=', $from)
@@ -89,7 +235,7 @@ class ReportController extends Controller
             ->orderBy('id')
             ->get();
 
-        $summary = [
+        $purchaseSummary = [
             'total_pembelian' => $purchases->count(),
             'total_belanja'   => (float) $purchases->sum('total'),
             'total_item'      => (int) $purchases->sum(fn ($p) => $p->details->sum('qty')),
@@ -98,8 +244,7 @@ class ReportController extends Controller
                 : 0,
         ];
 
-        // Rekap produk dibeli (group per produk) dalam rentang tanggal yang sama
-        $productRecap = PurchaseDetail::query()
+        $purchaseProductRecap = PurchaseDetail::query()
             ->select(
                 'product_id',
                 'product_name_snapshot',
@@ -116,7 +261,6 @@ class ReportController extends Controller
             ->orderByDesc('total_qty')
             ->get();
 
-        // Rekap belanja per supplier dalam rentang tanggal yang sama
         $supplierRecap = Purchase::query()
             ->select('supplier_id', DB::raw('COUNT(*) as total_pembelian'), DB::raw('SUM(total) as total_belanja'))
             ->with('supplier')
@@ -127,6 +271,61 @@ class ReportController extends Controller
             ->orderByDesc('total_belanja')
             ->get();
 
-        return view('reports.purchases', compact('purchases', 'summary', 'productRecap', 'supplierRecap', 'from', 'to'));
+        return compact('purchases', 'purchaseSummary', 'purchaseProductRecap', 'supplierRecap');
+    }
+
+    /**
+     * Data laporan waste (barang terbuang) untuk rentang tanggal tertentu.
+     * Memakai data Stock Adjustment (qty_diff negatif = jumlah terbuang).
+     */
+    private function wasteData(string $from, string $to): array
+    {
+        $inRange = function ($q) use ($from, $to) {
+            $q->whereDate('adjustment_date', '>=', $from)
+              ->whereDate('adjustment_date', '<=', $to);
+        };
+
+        // Jumlah terbuang = nilai absolut dari qty_diff yang negatif
+        $wasteQty = 'SUM(CASE WHEN qty_diff < 0 THEN -qty_diff ELSE 0 END)';
+
+        $adjustments = StockAdjustment::query()
+            ->with(['details', 'creator'])
+            ->where($inRange)
+            ->orderBy('adjustment_date')
+            ->orderBy('id')
+            ->get();
+
+        $wasteProductRecap = StockAdjustmentDetail::query()
+            ->select(
+                'product_id',
+                'product_name_snapshot',
+                'product_code_snapshot',
+                DB::raw("$wasteQty as total_qty"),
+                DB::raw('COUNT(*) as total_kejadian')
+            )
+            ->whereHas('adjustment', $inRange)
+            ->groupBy('product_id', 'product_name_snapshot', 'product_code_snapshot')
+            ->orderByDesc('total_qty')
+            ->get();
+
+        $wasteReasonRecap = StockAdjustmentDetail::query()
+            ->select(
+                'reason',
+                DB::raw('COUNT(*) as total_kejadian'),
+                DB::raw("$wasteQty as total_qty")
+            )
+            ->whereHas('adjustment', $inRange)
+            ->groupBy('reason')
+            ->orderByDesc('total_qty')
+            ->get();
+
+        $wasteSummary = [
+            'total_catatan' => $adjustments->count(),
+            'total_item'    => (int) $wasteReasonRecap->sum('total_qty'),
+            'jenis_alasan'  => $wasteReasonRecap->count(),
+            'produk_kena'   => $wasteProductRecap->count(),
+        ];
+
+        return compact('adjustments', 'wasteSummary', 'wasteProductRecap', 'wasteReasonRecap');
     }
 }
